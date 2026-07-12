@@ -1,10 +1,22 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ocr_service.dart';
 import '../services/ted_service.dart';
 import 'expense_review_screen.dart';
+
+/// Códigos con los que `image_picker` lanza `PlatformException` cuando el
+/// permiso de cámara o galería fue denegado permanentemente (el usuario
+/// eligió "No preguntar de nuevo" o lo desactivó desde ajustes). Extraída
+/// como función pura para poder testearla sin depender de una excepción
+/// real de plataforma.
+bool esErrorPermisoDenegado(PlatformException error) {
+  const codigos = {'camera_access_denied', 'photo_access_denied'};
+  return codigos.contains(error.code);
+}
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -58,10 +70,13 @@ class _ScanScreenState extends State<ScanScreen> {
       return;
     }
 
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image == null) return;
-
-    setState(() => _segmentos.add(image.path));
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+      if (image == null) return;
+      setState(() => _segmentos.add(image.path));
+    } on PlatformException catch (e) {
+      if (mounted) await _manejarErrorDeSeleccion(e);
+    }
   }
 
   /// Permite elegir una o varias fotos ya guardadas en el celular (por
@@ -73,10 +88,53 @@ class _ScanScreenState extends State<ScanScreen> {
       return;
     }
 
-    final List<XFile> images = await _picker.pickMultiImage();
-    if (images.isEmpty) return;
+    try {
+      final List<XFile> images = await _picker.pickMultiImage();
+      if (images.isEmpty) return;
+      setState(() => _segmentos.addAll(images.map((img) => img.path)));
+    } on PlatformException catch (e) {
+      if (mounted) await _manejarErrorDeSeleccion(e);
+    }
+  }
 
-    setState(() => _segmentos.addAll(images.map((img) => img.path)));
+  /// Si el error es porque el permiso quedó denegado permanentemente,
+  /// ofrece ir directo a los ajustes de la app para reactivarlo; para
+  /// cualquier otro error de plataforma, solo avisa.
+  Future<void> _manejarErrorDeSeleccion(PlatformException error) async {
+    if (!esErrorPermisoDenegado(error)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No se pudo acceder a la cámara o la galería.')),
+      );
+      return;
+    }
+
+    final abrirAjustes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permiso necesario'),
+        content: const Text(
+            'Luca necesita acceso a la cámara o la galería para escanear '
+            'tickets. Actívalo desde los ajustes de la app.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C63FF)),
+            child: const Text('Abrir ajustes',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (abrirAjustes == true) {
+      await openAppSettings();
+    }
   }
 
   void _descartarSegmentos() {

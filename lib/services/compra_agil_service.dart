@@ -1,8 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/compra_agil.dart';
+import 'mercado_publico_http_client.dart';
 import 'mercado_publico_service.dart' show MercadoPublicoException;
 
 /// Cliente del API dedicado de Compra Ágil de ChileCompra
@@ -12,6 +10,10 @@ import 'mercado_publico_service.dart' show MercadoPublicoException;
 /// parámetro de query como en el API de licitaciones.
 class CompraAgilService {
   static const _baseUrl = 'https://api2.mercadopublico.cl/v2/compra-agil';
+
+  /// [client] permite inyectar un `http.Client` fake en los tests.
+  final http.Client? _client;
+  CompraAgilService({http.Client? client}) : _client = client;
 
   /// Trae Compras Ágiles publicadas o con proveedor ya seleccionado,
   /// opcionalmente filtradas por palabra clave y/o región.
@@ -55,46 +57,15 @@ class CompraAgilService {
 
     final uri = Uri.parse(_baseUrl).replace(queryParameters: params);
 
-    late final http.Response response;
-    try {
-      response = await http
-          .get(uri, headers: {'ticket': ticket})
-          .timeout(const Duration(seconds: 12));
-    } on TimeoutException {
-      throw MercadoPublicoException(
-          'El API de Compra Ágil tardó demasiado en responder '
-          '(api2.mercadopublico.cl). Puede que esté lento o inaccesible '
-          'desde tu red — prueba con otra conexión o más tarde.');
-    } on SocketException catch (e) {
-      throw MercadoPublicoException(
-          'No se pudo conectar con api2.mercadopublico.cl (${e.osError?.message ?? 'sin conexión'}). '
-          'Revisa tu internet.');
-    } catch (e) {
-      throw MercadoPublicoException(
-          'No se pudo conectar con el API de Compra Ágil: $e');
-    }
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw MercadoPublicoException(
-          'Tu ticket no tiene acceso al API de Compra Ágil. Puede que '
-          'necesites solicitar uno específico en chilecompra.cl/api.');
-    }
-    if (response.statusCode == 429) {
-      throw MercadoPublicoException(
-          'Se alcanzó el límite diario de consultas al API de Compra Ágil.');
-    }
-    if (response.statusCode != 200) {
-      throw MercadoPublicoException(
-          'Compra Ágil respondió con un error (${response.statusCode}).');
-    }
-
-    Map<String, dynamic> body;
-    try {
-      body = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    } catch (_) {
-      throw MercadoPublicoException(
-          'No se pudo interpretar la respuesta del API de Compra Ágil.');
-    }
+    final body = await getJson(
+      uri,
+      nombreApi: 'Compra Ágil',
+      headers: {'ticket': ticket},
+      timeout: const Duration(seconds: 12),
+      mensajeSinAcceso: 'Tu ticket no tiene acceso al API de Compra Ágil. '
+          'Puede que necesites solicitar uno específico en chilecompra.cl/api.',
+      client: _client,
+    );
 
     if (body['success'] != 'OK') {
       final errores = body['errors'];

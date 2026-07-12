@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/background_tasks.dart';
 import '../services/mp_ticket_storage.dart';
 import '../services/notification_service.dart';
+import '../services/verificacion_status.dart';
 
 const String kMpKeywordsPrefKey = 'mp_keywords';
 const String kMpNotificacionesPrefKey = 'mp_notificaciones_activas';
@@ -22,6 +23,7 @@ class _MercadoPublicoConfigScreenState
   bool _loading = true;
   bool _saving = false;
   bool _notificacionesActivas = false;
+  EstadoVerificacion? _ultimaVerificacion;
 
   @override
   void initState() {
@@ -32,11 +34,13 @@ class _MercadoPublicoConfigScreenState
   Future<void> _load() async {
     final ticket = await leerTicketMercadoPublico();
     final prefs = await SharedPreferences.getInstance();
+    final ultimaVerificacion = await leerUltimaVerificacion();
     setState(() {
       _ticketController.text = ticket;
       _keywordsController.text = prefs.getString(kMpKeywordsPrefKey) ?? '';
       _notificacionesActivas =
           prefs.getBool(kMpNotificacionesPrefKey) ?? false;
+      _ultimaVerificacion = ultimaVerificacion;
       _loading = false;
     });
   }
@@ -162,6 +166,10 @@ class _MercadoPublicoConfigScreenState
                     activeThumbColor: const Color(0xFF6C63FF),
                     onChanged: _toggleNotificaciones,
                   ),
+                  if (_ultimaVerificacion != null) ...[
+                    const SizedBox(height: 4),
+                    _buildUltimaVerificacion(_ultimaVerificacion!),
+                  ],
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
@@ -186,5 +194,41 @@ class _MercadoPublicoConfigScreenState
               ),
             ),
     );
+  }
+
+  Widget _buildUltimaVerificacion(EstadoVerificacion estado) {
+    final IconData icono;
+    final Color color;
+    switch (estado.resultado) {
+      case ResultadoVerificacion.exito:
+        icono = Icons.check_circle_outline;
+        color = Colors.green;
+      case ResultadoVerificacion.sinCoincidencias:
+        icono = Icons.check_circle_outline;
+        color = Colors.grey[600]!;
+      case ResultadoVerificacion.error:
+        icono = Icons.error_outline;
+        color = Colors.red;
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, size: 14, color: color),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            'Última verificación: ${_formatearFecha(estado.fecha)} — ${estado.detalle}',
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatearFecha(DateTime fecha) {
+    String dosDigitos(int n) => n.toString().padLeft(2, '0');
+    return '${dosDigitos(fecha.day)}/${dosDigitos(fecha.month)}/${fecha.year} '
+        '${dosDigitos(fecha.hour)}:${dosDigitos(fecha.minute)}';
   }
 }

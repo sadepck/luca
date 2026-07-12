@@ -1,6 +1,7 @@
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+
 import '../models/licitacion.dart';
+import 'mercado_publico_http_client.dart';
 
 /// Error específico del servicio de Mercado Público, con un mensaje ya
 /// listo para mostrar al usuario en la UI.
@@ -17,6 +18,10 @@ class MercadoPublicoException implements Exception {
 /// https://api.mercadopublico.cl/modules/IniciarSesion.aspx con Clave Única.
 class MercadoPublicoService {
   static const _baseUrl = 'https://api.mercadopublico.cl/servicios/v1/publico';
+
+  /// [client] permite inyectar un `http.Client` fake en los tests.
+  final http.Client? _client;
+  MercadoPublicoService({http.Client? client}) : _client = client;
 
   Future<List<Licitacion>> buscarActivas(String ticket) {
     return _buscarLicitaciones({'estado': 'activas', 'ticket': ticket});
@@ -50,34 +55,11 @@ class MercadoPublicoService {
     final uri = Uri.parse('$_baseUrl/licitaciones.json')
         .replace(queryParameters: params);
 
-    late final http.Response response;
-    try {
-      response = await http.get(uri).timeout(const Duration(seconds: 20));
-    } catch (_) {
-      throw MercadoPublicoException(
-          'No se pudo conectar con Mercado Público. Revisa tu conexión.');
-    }
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw MercadoPublicoException(
-          'Tu ticket de Mercado Público no es válido o fue rechazado.');
-    }
-    if (response.statusCode == 429) {
-      throw MercadoPublicoException(
-          'Se alcanzó el límite diario de consultas al API (10.000/día).');
-    }
-    if (response.statusCode != 200) {
-      throw MercadoPublicoException(
-          'Mercado Público respondió con un error (${response.statusCode}).');
-    }
-
-    Map<String, dynamic> body;
-    try {
-      body = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    } catch (_) {
-      throw MercadoPublicoException(
-          'No se pudo interpretar la respuesta de Mercado Público.');
-    }
+    final body = await getJson(
+      uri,
+      nombreApi: 'Mercado Público',
+      client: _client,
+    );
 
     final listado = body['Listado'];
     if (listado is! List) return [];

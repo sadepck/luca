@@ -72,31 +72,33 @@ Leyenda:
 ## Épica C — Confiabilidad del feature de Mercado Público
 
 ### C1. Visibilidad del estado de la verificación en background
-- **Prioridad**: Media · **Esfuerzo**: M · **Estado**: Backlog
+- **Prioridad**: Media · **Esfuerzo**: M · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #3](REVISION_CODIGO.md)
 - **Descripción**: si falla el API o Workmanager no corre (frecuente en iOS), el usuario no tiene forma de saber que dejó de recibir alertas.
 - **Criterios de aceptación**:
-  - [ ] `verificarNuevasOportunidades()` persiste resultado del último chequeo (éxito/error/sin coincidencias + timestamp).
-  - [ ] Ya no se traga el error silenciosamente (`catch (_)`): se registra la causa (al menos en logs locales).
-  - [ ] Pantalla de configuración de Mercado Público muestra "Última verificación: [fecha] — [resultado]".
+  - [x] `verificarNuevasOportunidades()` persiste resultado del último chequeo (éxito/error/sin coincidencias + timestamp). Ver `lib/services/verificacion_status.dart`.
+  - [x] Ya no se traga el error silenciosamente (`catch (_)`): se registra la causa (al menos en logs locales). `oportunidades_watcher.dart` ahora usa `catch (e)` y guarda `e.toString()` (el mensaje de `MercadoPublicoException` ya es legible).
+  - [x] Pantalla de configuración de Mercado Público muestra "Última verificación: [fecha] — [resultado]". Ver `_buildUltimaVerificacion` en `mercado_publico_config_screen.dart`.
+  - **Nota técnica**: para poder testear los 3 estados (éxito/sin coincidencias/error) sin red ni el plugin real de notificaciones, se agregaron parámetros opcionales inyectables a `verificarNuevasOportunidades` (`service`, `notificar`), siguiendo el mismo patrón ya usado para `ticketStore`. Cubierto con tests en `test/verificacion_status_test.dart` y el nuevo grupo en `test/oportunidades_watcher_test.dart`.
 
 ### C2. Unificar el cliente HTTP de Mercado Público y Compra Ágil
-- **Prioridad**: Media · **Esfuerzo**: M · **Estado**: Backlog
+- **Prioridad**: Media · **Esfuerzo**: M · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #7](REVISION_CODIGO.md)
 - **Descripción**: `mercado_publico_service.dart` y `compra_agil_service.dart` duplican la lógica de request/timeout/parseo de errores y ya divergieron en calidad de mensajes de error.
 - **Criterios de aceptación**:
-  - [ ] Extraer un helper/cliente HTTP compartido (timeout, `SocketException`, `TimeoutException`, parseo JSON, mapeo a `MercadoPublicoException`).
-  - [ ] Ambos servicios lo usan; los mensajes de error quedan consistentes entre licitaciones y Compra Ágil.
-  - [ ] Sin regresión: tests existentes (si los hay) o manuales de ambos flujos siguen pasando.
+  - [x] Extraer un helper/cliente HTTP compartido (timeout, `SocketException`, `TimeoutException`, parseo JSON, mapeo a `MercadoPublicoException`). Ver `lib/services/mercado_publico_http_client.dart` (`getJson`).
+  - [x] Ambos servicios lo usan; los mensajes de error quedan consistentes entre licitaciones y Compra Ágil. `mercado_publico_service.dart` ahora distingue timeout/conexión/otro igual de bien que `compra_agil_service.dart` (antes tenía un `catch (_)` genérico y pobre). Cada servicio conserva su parseo propio del payload (las formas de respuesta de ambos APIs son distintas) y su mensaje específico de 401/403 vía `mensajeSinAcceso`.
+  - [x] Sin regresión: tests existentes (si los hay) o manuales de ambos flujos siguen pasando. Ambos servicios ahora aceptan un `http.Client` inyectable; se agregaron tests con `package:http/testing.dart` (`MockClient`) cubriendo el cliente compartido y el parseo específico de cada servicio (paginación de Compra Ágil incluida) — 21 tests nuevos en total.
+  - **Nota de la revisión**: los primeros tests con datos de prueba acentuados ("página", "Ágil") fallaban porque `http.Response` sin un header `content-type` explícito codifica el body como `latin1`, y el cliente decodifica como UTF-8. Se corrigió declarando `content-type: application/json` en las respuestas de prueba — es una particularidad del mock de test, no un bug de producción (una API real sí envía el charset correcto).
 
 ### C3. Manejo de permisos de cámara/galería denegados
-- **Prioridad**: Media · **Esfuerzo**: S · **Estado**: Backlog
+- **Prioridad**: Media · **Esfuerzo**: S · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #10](REVISION_CODIGO.md)
 - **Descripción**: en `scan_screen.dart`, las llamadas a `image_picker` no están protegidas; un permiso denegado permanentemente puede mostrar un error genérico o crashear.
 - **Criterios de aceptación**:
-  - [ ] `try/catch` alrededor de `pickImage`/`pickMultiImage` capturando `PlatformException`.
-  - [ ] Si el permiso está denegado permanentemente, diálogo con botón a `openAppSettings()` (`permission_handler`).
-  - [ ] Probado manualmente en Android denegando el permiso desde ajustes.
+  - [x] `try/catch` alrededor de `pickImage`/`pickMultiImage` capturando `PlatformException`.
+  - [x] Si el permiso está denegado permanentemente, diálogo con botón a `openAppSettings()` (`permission_handler`). Ver `_manejarErrorDeSeleccion` en `scan_screen.dart`.
+  - [ ] Probado manualmente en Android denegando el permiso desde ajustes. **Pendiente**: el entorno de desarrollo no tiene emulador Android/iOS ni cámara disponible (solo Windows desktop y navegador), así que esto no se pudo verificar de forma manual. La lógica de detección de códigos de error (`esErrorPermisoDenegado`) está cubierta con tests unitarios.
 
 ---
 

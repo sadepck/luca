@@ -5,6 +5,7 @@ import 'database_service.dart';
 import 'mercado_publico_service.dart';
 import 'mp_ticket_storage.dart';
 import 'notification_service.dart';
+import 'verificacion_status.dart';
 
 /// Revisa las licitaciones activas de Mercado Público, las cruza con las
 /// palabras clave del rubro del usuario y notifica solo las que no se
@@ -13,7 +14,15 @@ import 'notification_service.dart';
 ///
 /// [ticketStore] permite inyectar un almacenamiento seguro fake en los
 /// tests; en producción siempre se usa el real (Keystore/Keychain).
-Future<int> verificarNuevasOportunidades({TicketSecureStore? ticketStore}) async {
+/// [service] permite inyectar un [MercadoPublicoService] fake en los
+/// tests, para poder ejercitar los caminos de éxito/error sin red real.
+/// [notificar] permite inyectar un callback fake en los tests, para no
+/// depender del canal de plataforma real de `flutter_local_notifications`.
+Future<int> verificarNuevasOportunidades({
+  TicketSecureStore? ticketStore,
+  MercadoPublicoService? service,
+  Future<void> Function(int cantidad)? notificar,
+}) async {
   final ticket = await leerTicketMercadoPublico(store: ticketStore);
   final prefs = await SharedPreferences.getInstance();
   final palabrasClave = (prefs.getString(kMpKeywordsPrefKey) ?? '')
@@ -24,11 +33,13 @@ Future<int> verificarNuevasOportunidades({TicketSecureStore? ticketStore}) async
 
   if (ticket.isEmpty || palabrasClave.isEmpty) return 0;
 
-  final service = MercadoPublicoService();
+  final mpService = service ?? MercadoPublicoService();
   List<Licitacion> activas;
   try {
-    activas = await service.buscarActivas(ticket);
-  } catch (_) {
+    activas = await mpService.buscarActivas(ticket);
+  } catch (e) {
+    await registrarResultadoVerificacion(ResultadoVerificacion.error,
+        detalle: e.toString());
     return 0;
   }
 
@@ -36,15 +47,21 @@ Future<int> verificarNuevasOportunidades({TicketSecureStore? ticketStore}) async
       .where((licitacion) => coincideConPalabrasClave(licitacion, palabrasClave))
       .toList();
 
-  if (coincidentes.isEmpty) return 0;
-
   final codigos = coincidentes.map((l) => l.codigo).toList();
   final nuevos = await DatabaseService.instance.filtrarNoVistas(codigos);
 
-  if (nuevos.isEmpty) return 0;
+  if (nuevos.isEmpty) {
+    await registrarResultadoVerificacion(ResultadoVerificacion.sinCoincidencias,
+        detalle: 'Sin oportunidades nuevas');
+    return 0;
+  }
 
-  await NotificationService.instance.mostrarNuevasOportunidades(nuevos.length);
+  final avisar = notificar ?? NotificationService.instance.mostrarNuevasOportunidades;
+  await avisar(nuevos.length);
   await DatabaseService.instance.marcarComoVistas(nuevos);
+
+  await registrarResultadoVerificacion(ResultadoVerificacion.exito,
+      detalle: '${nuevos.length} oportunidad${nuevos.length == 1 ? '' : 'es'} nueva${nuevos.length == 1 ? '' : 's'}');
 
   return nuevos.length;
 }
