@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/expense.dart';
 import '../services/database_service.dart';
 import '../services/export_service.dart';
+import '../services/receipt_storage.dart';
 import 'scan_screen.dart';
 import 'mercado_publico_screen.dart';
 import 'flujo_caja_screen.dart';
@@ -38,7 +39,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _expenses.removeWhere((e) => e.id == expense.id));
     await DatabaseService.instance.deleteExpense(expense.id!);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    // Solo se borra el archivo de la foto si el usuario no deshace la
+    // eliminación: "Deshacer" recrea el gasto reutilizando la misma
+    // imagePath, así que borrar el archivo antes de tiempo la dejaría
+    // rota.
+    final closedReason = await ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Gasto eliminado'),
         action: SnackBarAction(
@@ -55,7 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
       ),
-    );
+    ).closed;
+
+    if (closedReason != SnackBarClosedReason.action) {
+      await eliminarFotoTicket(expense.imagePath);
+    }
   }
 
   double get _totalThisMonth {

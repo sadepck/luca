@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:luca/models/licitacion.dart';
 import 'package:luca/services/database_service.dart';
+import 'package:luca/services/mp_ticket_storage.dart';
 import 'package:luca/services/oportunidades_watcher.dart';
 
 Licitacion _licitacion({required String nombre, String? descripcion}) {
@@ -16,6 +17,20 @@ Licitacion _licitacion({required String nombre, String? descripcion}) {
     descripcion: descripcion,
     estado: 'activa',
   );
+}
+
+/// Fake en memoria de [TicketSecureStore], para no depender del canal de
+/// plataforma de `flutter_secure_storage` (no disponible en el entorno de
+/// test) al ejercitar `verificarNuevasOportunidades`.
+class _FakeTicketSecureStore implements TicketSecureStore {
+  String? valor;
+  _FakeTicketSecureStore([this.valor]);
+
+  @override
+  Future<String?> read() async => valor;
+
+  @override
+  Future<void> write(String value) async => valor = value;
 }
 
 void main() {
@@ -59,24 +74,34 @@ void main() {
         'mp_keywords': 'ferretería',
       });
 
-      expect(await verificarNuevasOportunidades(), 0);
+      expect(
+        await verificarNuevasOportunidades(ticketStore: _FakeTicketSecureStore()),
+        0,
+      );
     });
 
     test('sin palabras clave configuradas, devuelve 0 sin llamar al API', () async {
-      SharedPreferences.setMockInitialValues({
-        'mp_ticket': 'un-ticket-cualquiera',
-      });
+      SharedPreferences.setMockInitialValues({});
 
-      expect(await verificarNuevasOportunidades(), 0);
+      expect(
+        await verificarNuevasOportunidades(
+          ticketStore: _FakeTicketSecureStore('un-ticket-cualquiera'),
+        ),
+        0,
+      );
     });
 
     test('con solo comas/espacios como palabras clave, devuelve 0', () async {
       SharedPreferences.setMockInitialValues({
-        'mp_ticket': 'un-ticket-cualquiera',
         'mp_keywords': ' , , ',
       });
 
-      expect(await verificarNuevasOportunidades(), 0);
+      expect(
+        await verificarNuevasOportunidades(
+          ticketStore: _FakeTicketSecureStore('un-ticket-cualquiera'),
+        ),
+        0,
+      );
     });
   });
 

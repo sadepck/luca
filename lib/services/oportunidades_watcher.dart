@@ -1,18 +1,21 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/licitacion.dart';
-import '../screens/mercado_publico_config_screen.dart'
-    show kMpTicketPrefKey, kMpKeywordsPrefKey;
+import '../screens/mercado_publico_config_screen.dart' show kMpKeywordsPrefKey;
 import 'database_service.dart';
 import 'mercado_publico_service.dart';
+import 'mp_ticket_storage.dart';
 import 'notification_service.dart';
 
 /// Revisa las licitaciones activas de Mercado Público, las cruza con las
 /// palabras clave del rubro del usuario y notifica solo las que no se
 /// habían visto antes. La usan tanto la pantalla principal (al refrescar)
 /// como la tarea periódica de Workmanager en segundo plano.
-Future<int> verificarNuevasOportunidades() async {
+///
+/// [ticketStore] permite inyectar un almacenamiento seguro fake en los
+/// tests; en producción siempre se usa el real (Keystore/Keychain).
+Future<int> verificarNuevasOportunidades({TicketSecureStore? ticketStore}) async {
+  final ticket = await leerTicketMercadoPublico(store: ticketStore);
   final prefs = await SharedPreferences.getInstance();
-  final ticket = prefs.getString(kMpTicketPrefKey) ?? '';
   final palabrasClave = (prefs.getString(kMpKeywordsPrefKey) ?? '')
       .split(',')
       .map((p) => p.trim().toLowerCase())

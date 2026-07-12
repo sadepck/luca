@@ -45,22 +45,27 @@ Leyenda:
 ## Épica B — Integridad de datos y seguridad
 
 ### B1. Persistir fotos de boletas en almacenamiento propio de la app
-- **Prioridad**: Alta · **Esfuerzo**: S · **Estado**: Backlog
+- **Prioridad**: Alta · **Esfuerzo**: S · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #6](REVISION_CODIGO.md)
 - **Descripción**: `imagePath` guarda la ruta temporal que devuelve `image_picker`, que el SO puede limpiar. Se pierde la evidencia original del ticket.
 - **Criterios de aceptación**:
-  - [ ] Al confirmar un gasto, la(s) foto(s) se copian a un subdirectorio dentro de `getApplicationDocumentsDirectory()`.
-  - [ ] `Expense.imagePath` guarda la ruta persistente, no la de `image_picker`.
-  - [ ] Al eliminar un gasto, se borra también su archivo de imagen (evitar huérfanos que acumulen espacio).
-  - [ ] Migración simple: gastos existentes con ruta rota se detectan y no rompen la UI (mostrar placeholder en vez de excepción).
+  - [x] Al confirmar un gasto, la(s) foto(s) se copian a un subdirectorio dentro de `getApplicationDocumentsDirectory()`. Ver `lib/services/receipt_storage.dart` (`guardarFotoTicketPersistente`), usado desde `expense_review_screen.dart`.
+  - [x] `Expense.imagePath` guarda la ruta persistente, no la de `image_picker`.
+  - [x] Al eliminar un gasto, se borra también su archivo de imagen (evitar huérfanos que acumulen espacio). Implementado en `home_screen.dart` (`_eliminarGasto`), con cuidado de no borrar el archivo si el usuario presiona "Deshacer" (se espera a que se cierre el SnackBar sin la acción de deshacer).
+  - [x] Migración simple: gastos existentes con ruta rota se detectan y no rompen la UI (mostrar placeholder en vez de excepción). `expense_detail_screen.dart` ahora distingue "sin foto" de "foto perdida" y muestra un placeholder con ícono en el segundo caso.
+  - **Nota de verificación**: cubierto con 10 tests unitarios (`test/receipt_storage_test.dart`) para la lógica de copiar/eliminar. No se pudo probar manualmente el flujo end-to-end en la app real (escanear → guardar → eliminar → deshacer) porque el entorno de desarrollo no tiene emulador Android/iOS ni cámara disponible — solo Windows desktop y navegador.
+  - **Hallazgos de la revisión final**:
+    1. Si la foto temporal de `image_picker` ya no existe al guardar (justo el escenario que B1 previene), `guardarFotoTicketPersistente` lanzaba una excepción no capturada que bloqueaba el guardado completo del gasto — peor que el comportamiento anterior. Se agregó un fallback en `expense_review_screen.dart` que guarda el gasto sin foto en ese caso, en vez de fallar.
+    2. El nombre del archivo destino se basaba solo en `microsecondsSinceEpoch`, cuya resolución real varía por plataforma; dos fotos guardadas en el mismo tick de reloj se habrían pisado entre sí. Se agregó un contador de proceso como desempate.
 
 ### B2. Cifrar el ticket de Mercado Público
-- **Prioridad**: Media · **Esfuerzo**: S · **Estado**: Backlog
+- **Prioridad**: Media · **Esfuerzo**: S · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #5](REVISION_CODIGO.md)
 - **Descripción**: el ticket (ligado a la Clave Única del usuario) se guarda con `shared_preferences`, texto plano en Android.
 - **Criterios de aceptación**:
-  - [ ] Migrar el guardado/lectura del ticket de `shared_preferences` a `flutter_secure_storage`.
-  - [ ] Migración automática: si existe un ticket viejo en `shared_preferences`, se mueve a secure storage y se borra el original la primera vez que se abre la app.
+  - [x] Migrar el guardado/lectura del ticket de `shared_preferences` a `flutter_secure_storage`. Ver `lib/services/mp_ticket_storage.dart` (`leerTicketMercadoPublico`/`guardarTicketMercadoPublico`), usado desde `mercado_publico_config_screen.dart`, `mercado_publico_screen.dart` y `oportunidades_watcher.dart`.
+  - [x] Migración automática: si existe un ticket viejo en `shared_preferences`, se mueve a secure storage y se borra el original la primera vez que se abre la app. Cubierto con tests en `test/mp_ticket_storage_test.dart` (lectura desde secure storage, migración desde legado, borrado del legado post-migración, caso sin ticket).
+  - **Nota**: `flutter_secure_storage` requirió subir a `^10.3.1` (en vez de `^9.x`) por un conflicto de versión de `win32` con `share_plus`; `flutter pub get` resolvió limpio con esa versión.
 
 ---
 

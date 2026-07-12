@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/expense.dart';
 import '../models/item_gasto.dart';
 import '../services/database_service.dart';
+import '../services/receipt_storage.dart';
 
 /// Pantalla de revisión post-OCR: muestra la foto del ticket junto a los
 /// campos extraídos, marca cuáles fueron editados por el usuario y avisa
@@ -280,6 +281,16 @@ class _ExpenseReviewScreenState extends State<ExpenseReviewScreen> {
 
   Future<void> _guardar() async {
     setState(() => _guardando = true);
+    String? imagePathPersistente;
+    try {
+      imagePathPersistente =
+          await guardarFotoTicketPersistente(widget.imagePaths.first);
+    } catch (_) {
+      // La foto temporal ya no está disponible (el SO la limpió antes de
+      // que el usuario guardara). Mejor guardar el gasto sin foto que
+      // bloquear el guardado completo por esto.
+      imagePathPersistente = null;
+    }
     final expense = Expense(
       title: _titleController.text.trim().isEmpty
           ? 'Compra'
@@ -287,7 +298,7 @@ class _ExpenseReviewScreenState extends State<ExpenseReviewScreen> {
       amount: double.tryParse(_amountController.text) ?? 0,
       category: _categoria,
       date: _fecha,
-      imagePath: widget.imagePaths.first,
+      imagePath: imagePathPersistente,
       folio: widget.folio,
       tipoDte: widget.tipoDte,
       rutEmisor: widget.rutEmisor,

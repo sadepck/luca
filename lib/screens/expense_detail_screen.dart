@@ -57,8 +57,9 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final expense = widget.expense;
-    final tieneImagen =
-        expense.imagePath != null && File(expense.imagePath!).existsSync();
+    final tieneRutaImagen = expense.imagePath != null;
+    final imagenExiste =
+        tieneRutaImagen && File(expense.imagePath!).existsSync();
 
     return Scaffold(
       appBar: AppBar(
@@ -71,15 +72,31 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (tieneImagen)
+            if (tieneRutaImagen)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  File(expense.imagePath!),
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                ),
+                child: imagenExiste
+                    ? Image.file(
+                        File(expense.imagePath!),
+                        width: double.infinity,
+                        height: 200,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        width: double.infinity,
+                        height: 200,
+                        color: Colors.grey.shade200,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_not_supported_outlined,
+                                size: 40, color: Colors.grey[500]),
+                            const SizedBox(height: 8),
+                            Text('Foto no disponible',
+                                style: TextStyle(color: Colors.grey[600])),
+                          ],
+                        ),
+                      ),
               ),
             const SizedBox(height: 16),
             Text(expense.title,

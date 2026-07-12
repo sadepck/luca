@@ -5,6 +5,7 @@ import '../models/licitacion.dart';
 import '../services/compra_agil_service.dart';
 import '../services/database_service.dart';
 import '../services/mercado_publico_service.dart';
+import '../services/mp_ticket_storage.dart';
 import 'mercado_publico_config_screen.dart';
 import 'oportunidad_detalle_screen.dart';
 
@@ -50,8 +51,8 @@ class _MercadoPublicoScreenState extends State<MercadoPublicoScreen> {
       _error = null;
     });
 
+    _ticket = await leerTicketMercadoPublico();
     final prefs = await SharedPreferences.getInstance();
-    _ticket = prefs.getString(kMpTicketPrefKey) ?? '';
     _palabrasClave = (prefs.getString(kMpKeywordsPrefKey) ?? '')
         .split(',')
         .map((p) => p.trim().toLowerCase())

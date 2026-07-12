@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/background_tasks.dart';
+import '../services/mp_ticket_storage.dart';
 import '../services/notification_service.dart';
 
-const String kMpTicketPrefKey = 'mp_ticket';
 const String kMpKeywordsPrefKey = 'mp_keywords';
 const String kMpNotificacionesPrefKey = 'mp_notificaciones_activas';
 
@@ -30,9 +30,10 @@ class _MercadoPublicoConfigScreenState
   }
 
   Future<void> _load() async {
+    final ticket = await leerTicketMercadoPublico();
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _ticketController.text = prefs.getString(kMpTicketPrefKey) ?? '';
+      _ticketController.text = ticket;
       _keywordsController.text = prefs.getString(kMpKeywordsPrefKey) ?? '';
       _notificacionesActivas =
           prefs.getBool(kMpNotificacionesPrefKey) ?? false;
@@ -42,8 +43,8 @@ class _MercadoPublicoConfigScreenState
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    await guardarTicketMercadoPublico(_ticketController.text.trim());
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kMpTicketPrefKey, _ticketController.text.trim());
     await prefs.setString(
         kMpKeywordsPrefKey, _keywordsController.text.trim());
     setState(() => _saving = false);
