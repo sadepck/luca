@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/expense.dart';
@@ -19,15 +20,43 @@ class DatabaseService {
     return _database!;
   }
 
+  static const int _dbVersion = 9;
+
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 9,
+      version: _dbVersion,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
+  }
+
+  /// Abre (o migra) la base de datos en [path] usando el mismo [onCreate]/
+  /// [onUpgrade] reales de la app. Permite a los tests ejercitar el
+  /// esquema resultante de una instalación limpia o de una cadena de
+  /// migraciones sin depender de `getDatabasesPath()` (que requiere un
+  /// canal de plataforma no disponible en el entorno de test).
+  @visibleForTesting
+  Future<Database> openForTesting(String path, {int version = _dbVersion}) async {
+    await _database?.close();
+    _database = await openDatabase(
+      path,
+      version: version,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+    );
+    return _database!;
+  }
+
+  /// Cierra la base de datos en memoria del singleton, si hay una abierta.
+  /// Los tests deben llamarlo en `tearDown` para no filtrar estado (una
+  /// base de datos ya abierta) entre casos de test.
+  @visibleForTesting
+  static Future<void> resetForTesting() async {
+    await _database?.close();
+    _database = null;
   }
 
   Future _createDB(Database db, int version) async {
@@ -71,7 +100,13 @@ class DatabaseService {
       await _createCotizacionItemsTable(db);
     }
     if (oldVersion < 6) {
-      await db.execute('ALTER TABLE expense_items ADD COLUMN cantidad REAL NOT NULL DEFAULT 1');
+      if (oldVersion >= 5) {
+        // Si oldVersion < 5, expense_items recién se creó arriba con
+        // _createExpenseItemsTable, que ya incluye la columna `cantidad`
+        // en su CREATE TABLE — agregarla de nuevo aquí duplicaría la
+        // columna y rompería la migración.
+        await db.execute('ALTER TABLE expense_items ADD COLUMN cantidad REAL NOT NULL DEFAULT 1');
+      }
       await db.execute('ALTER TABLE expenses ADD COLUMN folio TEXT');
       await db.execute('ALTER TABLE expenses ADD COLUMN tipoDte TEXT');
       await db.execute('ALTER TABLE expenses ADD COLUMN rutEmisor TEXT');

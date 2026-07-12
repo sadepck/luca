@@ -29,11 +29,9 @@ Future<int> verificarNuevasOportunidades() async {
     return 0;
   }
 
-  final coincidentes = activas.where((licitacion) {
-    final texto =
-        '${licitacion.nombre} ${licitacion.descripcion ?? ''}'.toLowerCase();
-    return palabrasClave.any((p) => texto.contains(p));
-  }).toList();
+  final coincidentes = activas
+      .where((licitacion) => coincideConPalabrasClave(licitacion, palabrasClave))
+      .toList();
 
   if (coincidentes.isEmpty) return 0;
 
@@ -46,4 +44,14 @@ Future<int> verificarNuevasOportunidades() async {
   await DatabaseService.instance.marcarComoVistas(nuevos);
 
   return nuevos.length;
+}
+
+/// Compara, sin distinguir mayúsculas/minúsculas, si alguna [palabrasClave]
+/// aparece en el nombre o la descripción de [licitacion]. Extraída como
+/// función pura para poder testearla sin depender del API ni de la base
+/// de datos.
+bool coincideConPalabrasClave(Licitacion licitacion, List<String> palabrasClave) {
+  final texto =
+      '${licitacion.nombre} ${licitacion.descripcion ?? ''}'.toLowerCase();
+  return palabrasClave.any((p) => texto.contains(p));
 }

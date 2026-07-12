@@ -1,5 +1,7 @@
 # Luca
 
+[![CI](https://github.com/sadepck/luca/actions/workflows/ci.yml/badge.svg)](https://github.com/sadepck/luca/actions/workflows/ci.yml)
+
 Aplicación Flutter para escanear tickets/boletas y registrar gastos automáticamente, con soporte adicional para monitorear licitaciones y Compras Ágiles del mercado público chileno (ChileCompra).
 
 ## Funcionalidades
