@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../models/expense.dart';
-import '../services/database_service.dart';
 import '../services/export_service.dart';
+import '../services/expenses_repository.dart';
 import '../services/receipt_storage.dart';
 import 'scan_screen.dart';
 import 'mercado_publico_screen.dart';
 import 'flujo_caja_screen.dart';
 import 'expense_detail_screen.dart';
 import 'ingresos_ordenes_screen.dart';
+import 'ocr_telemetria_screen.dart';
 import 'proveedores_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,26 +19,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Expense> _expenses = [];
-  bool _loading = true;
+  final _repo = ExpensesRepository.instance;
 
   @override
   void initState() {
     super.initState();
-    _loadExpenses();
-  }
-
-  Future<void> _loadExpenses() async {
-    final expenses = await DatabaseService.instance.getAllExpenses();
-    setState(() {
-      _expenses = expenses;
-      _loading = false;
-    });
+    _repo.cargar();
   }
 
   Future<void> _eliminarGasto(Expense expense) async {
-    setState(() => _expenses.removeWhere((e) => e.id == expense.id));
-    await DatabaseService.instance.deleteExpense(expense.id!);
+    await _repo.eliminar(expense.id!);
     if (!mounted) return;
     // Solo se borra el archivo de la foto si el usuario no deshace la
     // eliminación: "Deshacer" recrea el gasto reutilizando la misma
@@ -48,15 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
         content: const Text('Gasto eliminado'),
         action: SnackBarAction(
           label: 'Deshacer',
-          onPressed: () async {
-            await DatabaseService.instance.createExpense(Expense(
+          onPressed: () {
+            _repo.crear(Expense(
               title: expense.title,
               amount: expense.amount,
               category: expense.category,
               date: expense.date,
               imagePath: expense.imagePath,
             ));
-            _loadExpenses();
           },
         ),
       ),
@@ -67,16 +57,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  double get _totalThisMonth {
+  double _totalThisMonth(List<Expense> expenses) {
     final now = DateTime.now();
-    return _expenses
+    return expenses
         .where((e) => e.date.month == now.month && e.date.year == now.year)
         .fold(0, (sum, e) => sum + e.amount);
   }
 
-  Map<String, double> get _categoryTotals {
+  Map<String, double> _categoryTotals(List<Expense> expenses) {
     final Map<String, double> totals = {};
-    for (final e in _expenses) {
+    for (final e in expenses) {
       totals[e.category] = (totals[e.category] ?? 0) + e.amount;
     }
     return totals;
@@ -104,123 +94,145 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text('Luca', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.show_chart),
-            tooltip: 'Flujo de caja',
-            onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const FlujoCajaScreen()));
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.storefront),
-            tooltip: 'Mercado Público',
-            onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MercadoPublicoScreen()));
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.request_quote_outlined),
-            tooltip: 'Ingresos por órdenes de compra',
-            onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const IngresosOrdenesScreen()));
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (opcion) {
-              switch (opcion) {
-                case 'proveedores':
+    return ListenableBuilder(
+      listenable: _repo,
+      builder: (context, _) {
+        final expenses = _repo.expenses;
+        final loading = !_repo.cargado;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F5F5),
+          appBar: AppBar(
+            title: const Text('Luca', style: TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: const Color(0xFF6C63FF),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.show_chart),
+                tooltip: 'Flujo de caja',
+                onPressed: () {
                   Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const ProveedoresScreen()));
-                  break;
-                case 'exportar':
-                  if (_expenses.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Aún no hay gastos que exportar')),
-                    );
-                  } else {
-                    exportarGastosCsv(_expenses);
-                  }
-                  break;
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'proveedores',
-                child: Row(children: [
-                  Icon(Icons.storefront_outlined, size: 20),
-                  SizedBox(width: 12),
-                  Text('Proveedores'),
-                ]),
+                      MaterialPageRoute(builder: (_) => const FlujoCajaScreen()));
+                },
               ),
-              PopupMenuItem(
-                value: 'exportar',
-                child: Row(children: [
-                  Icon(Icons.ios_share, size: 20),
-                  SizedBox(width: 12),
-                  Text('Exportar gastos (CSV)'),
-                ]),
+              IconButton(
+                icon: const Icon(Icons.storefront),
+                tooltip: 'Mercado Público',
+                onPressed: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const MercadoPublicoScreen()));
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.request_quote_outlined),
+                tooltip: 'Ingresos por órdenes de compra',
+                onPressed: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const IngresosOrdenesScreen()));
+                },
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (opcion) {
+                  switch (opcion) {
+                    case 'proveedores':
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const ProveedoresScreen()));
+                      break;
+                    case 'exportar':
+                      if (expenses.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Aún no hay gastos que exportar')),
+                        );
+                      } else {
+                        exportarGastosCsv(expenses);
+                      }
+                      break;
+                    case 'calidad_ocr':
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const OcrTelemetriaScreen()));
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'proveedores',
+                    child: Row(children: [
+                      Icon(Icons.storefront_outlined, size: 20),
+                      SizedBox(width: 12),
+                      Text('Proveedores'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'exportar',
+                    child: Row(children: [
+                      Icon(Icons.ios_share, size: 20),
+                      SizedBox(width: 12),
+                      Text('Exportar gastos (CSV)'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'calidad_ocr',
+                    child: Row(children: [
+                      Icon(Icons.query_stats, size: 20),
+                      SizedBox(width: 12),
+                      Text('Calidad del escaneo (OCR)'),
+                    ]),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadExpenses,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSummaryCard(),
-                    const SizedBox(height: 16),
-                    _buildCategoryBreakdown(),
-                    const SizedBox(height: 16),
-                    const Text('Gastos recientes',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    _expenses.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _expenses.length,
-                            itemBuilder: (context, index) =>
-                                _buildExpenseCard(_expenses[index]),
-                          ),
-                  ],
+          body: loading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _repo.cargar,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSummaryCard(_totalThisMonth(expenses)),
+                        const SizedBox(height: 16),
+                        _buildCategoryBreakdown(_categoryTotals(expenses)),
+                        const SizedBox(height: 16),
+                        const Text('Gastos recientes',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        expenses.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: expenses.length,
+                                itemBuilder: (context, index) =>
+                                    _buildExpenseCard(expenses[index]),
+                              ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const ScanScreen()));
-          _loadExpenses();
-        },
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.camera_alt),
-        label: const Text('Escanear ticket'),
-      ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () {
+              // No hace falta recargar manualmente al volver: guardar el
+              // gasto en ExpenseReviewScreen pasa por ExpensesRepository,
+              // que notifica a este ListenableBuilder solo.
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ScanScreen()));
+            },
+            backgroundColor: const Color(0xFF6C63FF),
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('Escanear ticket'),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(double totalThisMonth) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -236,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const Text('Gasto este mes',
               style: TextStyle(color: Colors.white70, fontSize: 14)),
           const SizedBox(height: 8),
-          Text('\$${_totalThisMonth.toStringAsFixed(0)}',
+          Text('\$${totalThisMonth.toStringAsFixed(0)}',
               style: const TextStyle(
                   color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
         ],
@@ -244,15 +256,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategoryBreakdown() {
-    if (_categoryTotals.isEmpty) return const SizedBox();
+  Widget _buildCategoryBreakdown(Map<String, double> categoryTotals) {
+    if (categoryTotals.isEmpty) return const SizedBox();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Por categoría',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        ..._categoryTotals.entries.map((entry) => Padding(
+        ...categoryTotals.entries.map((entry) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [

@@ -73,5 +73,5 @@ Future<int> verificarNuevasOportunidades({
 bool coincideConPalabrasClave(Licitacion licitacion, List<String> palabrasClave) {
   final texto =
       '${licitacion.nombre} ${licitacion.descripcion ?? ''}'.toLowerCase();
-  return palabrasClave.any((p) => texto.contains(p));
+  return palabrasClave.any(texto.contains);
 }

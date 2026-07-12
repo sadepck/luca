@@ -66,7 +66,7 @@ class MercadoPublicoService {
 
     return listado
         .whereType<Map<String, dynamic>>()
-        .map((item) => Licitacion.fromJson(item))
+        .map(Licitacion.fromJson)
         .where((licitacion) => licitacion.codigo.isNotEmpty)
         .toList();
   }

@@ -45,8 +45,8 @@ class TedData {
 
 /// Decodifica el código de barras PDF417 (Timbre Electrónico del SII) que
 /// traen algunas boletas y facturas chilenas. Es una sección XML firmada
-/// pero NO cifrada (formato `<TED><DD><RE>...</RE><MNT>...</MNT>...</DD>
-/// <FRMT>...</FRMT></TED>`), así que sus campos se pueden leer directamente
+/// pero NO cifrada (formato `&lt;TED&gt;&lt;DD&gt;&lt;RE&gt;...&lt;/RE&gt;&lt;MNT&gt;...&lt;/MNT&gt;...&lt;/DD&gt;
+/// &lt;FRMT&gt;...&lt;/FRMT&gt;&lt;/TED&gt;`), así que sus campos se pueden leer directamente
 /// sin validar la firma digital.
 ///
 /// Nota: desde el 1 de enero de 2026 (Resolución Exenta SII N°207) imprimir

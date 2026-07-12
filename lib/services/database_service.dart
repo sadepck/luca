@@ -82,7 +82,6 @@ class DatabaseService {
     await _createExpenseItemsTable(db);
     await _createCotizacionItemsTable(db);
     await _createOrdenesCompraTable(db);
-    await db.execute('ALTER TABLE ordenes_compra ADD COLUMN fechaPagoEsperada TEXT');
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -120,7 +119,14 @@ class DatabaseService {
       await _createOrdenesCompraTable(db);
     }
     if (oldVersion < 9) {
-      await db.execute('ALTER TABLE ordenes_compra ADD COLUMN fechaPagoEsperada TEXT');
+      if (oldVersion >= 8) {
+        // Si oldVersion < 8, ordenes_compra recién se creó arriba con
+        // _createOrdenesCompraTable, que ya incluye la columna
+        // `fechaPagoEsperada` en su CREATE TABLE — agregarla de nuevo
+        // aquí duplicaría la columna y rompería la migración (mismo caso
+        // que `expense_items.cantidad` más arriba).
+        await db.execute('ALTER TABLE ordenes_compra ADD COLUMN fechaPagoEsperada TEXT');
+      }
     }
   }
 
@@ -191,7 +197,8 @@ class DatabaseService {
         proveedorRut TEXT,
         montoCompra REAL NOT NULL,
         montoIngreso REAL NOT NULL,
-        fecha TEXT NOT NULL
+        fecha TEXT NOT NULL,
+        fechaPagoEsperada TEXT
       )
     ''');
   }
@@ -216,7 +223,7 @@ class DatabaseService {
   Future<List<OrdenCompraGenerada>> getOrdenesCompra() async {
     final db = await instance.database;
     final result = await db.query('ordenes_compra', orderBy: 'fecha DESC');
-    return result.map((map) => OrdenCompraGenerada.fromMap(map)).toList();
+    return result.map(OrdenCompraGenerada.fromMap).toList();
   }
 
   Future<void> eliminarOrdenCompra(int id) async {
@@ -246,7 +253,7 @@ class DatabaseService {
   Future<List<Expense>> getAllExpenses() async {
     final db = await instance.database;
     final result = await db.query('expenses', orderBy: 'date DESC');
-    return result.map((map) => Expense.fromMap(map)).toList();
+    return result.map(Expense.fromMap).toList();
   }
 
   Future<int> deleteExpense(int id) async {
@@ -266,7 +273,7 @@ class DatabaseService {
   Future<List<OportunidadGuardada>> getOportunidadesGuardadas() async {
     final db = await instance.database;
     final result = await db.query('oportunidades', orderBy: 'fechaCierre ASC');
-    return result.map((map) => OportunidadGuardada.fromMap(map)).toList();
+    return result.map(OportunidadGuardada.fromMap).toList();
   }
 
   Future<void> eliminarOportunidad(String codigo) async {
@@ -320,7 +327,7 @@ class DatabaseService {
   Future<List<IngresoEsperado>> getIngresos() async {
     final db = await instance.database;
     final result = await db.query('ingresos_esperados', orderBy: 'diaDelMes ASC');
-    return result.map((map) => IngresoEsperado.fromMap(map)).toList();
+    return result.map(IngresoEsperado.fromMap).toList();
   }
 
   Future<void> eliminarIngreso(int id) async {
@@ -347,7 +354,7 @@ class DatabaseService {
     final db = await instance.database;
     final result = await db
         .query('expense_items', where: 'expenseId = ?', whereArgs: [expenseId]);
-    return result.map((map) => ItemGasto.fromMap(map)).toList();
+    return result.map(ItemGasto.fromMap).toList();
   }
 
   Future<void> guardarItemCotizacion(ItemCotizacion item) async {
@@ -362,7 +369,7 @@ class DatabaseService {
       where: 'codigoOportunidad = ?',
       whereArgs: [codigoOportunidad],
     );
-    return result.map((map) => ItemCotizacion.fromMap(map)).toList();
+    return result.map(ItemCotizacion.fromMap).toList();
   }
 
   Future<void> eliminarItemCotizacion(int id) async {

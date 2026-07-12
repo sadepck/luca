@@ -85,7 +85,7 @@ class CompraAgilService {
 
     final resultado = items
         .whereType<Map<String, dynamic>>()
-        .map((item) => CompraAgil.fromJson(item))
+        .map(CompraAgil.fromJson)
         .where((ca) => ca.codigo.isNotEmpty)
         .toList();
     return (resultado, totalPaginas);

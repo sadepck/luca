@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ocr_service.dart';
+import '../services/ocr_telemetry.dart';
 import '../services/ted_service.dart';
 import 'expense_review_screen.dart';
 
@@ -138,7 +139,7 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   void _descartarSegmentos() {
-    setState(() => _segmentos.clear());
+    setState(_segmentos.clear);
   }
 
   Future<void> _procesarTicket() async {
@@ -172,6 +173,11 @@ class _ScanScreenState extends State<ScanScreen> {
         data['tipoDte'] = data['tipoDteTexto'];
         data['rutEmisor'] = data['rutEmisorTexto'];
       }
+
+      await registrarEventoOcr(
+        descuadre: data['descuadre'] as bool? ?? false,
+        montoCero: ((data['amount'] as num?)?.toDouble() ?? 0) == 0,
+      );
 
       await _incrementScanCount();
       final segmentosCapturados = List<String>.from(_segmentos);

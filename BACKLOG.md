@@ -105,40 +105,43 @@ Leyenda:
 ## Épica D — Arquitectura y mantenibilidad (mediano plazo)
 
 ### D1. Introducir capa de repositorio / estado compartido para gastos
-- **Prioridad**: Media · **Esfuerzo**: L · **Estado**: Backlog
+- **Prioridad**: Media · **Esfuerzo**: L · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #8](REVISION_CODIGO.md)
 - **Descripción**: 25 llamadas directas a `DatabaseService.instance` repartidas en 10 pantallas, sin estado compartido ni notificación de cambios entre ellas.
 - **Criterios de aceptación**:
-  - [ ] `ExpensesRepository` (o `ChangeNotifier`/`Provider`) como único punto de acceso a los gastos.
-  - [ ] `home_screen.dart` y `expense_detail_screen.dart` migrados a consumirlo (piloto antes de extender al resto).
-  - [ ] Guardar un gasto desde el flujo de escaneo refresca `home_screen` sin recarga manual.
-  - [ ] Documentar el patrón para que el resto de las pantallas (licitaciones, cotizaciones) lo vayan adoptando de forma incremental.
+  - [x] `ExpensesRepository` (o `ChangeNotifier`/`Provider`) como único punto de acceso a los gastos. Se usó `ChangeNotifier` nativo de Flutter (sin sumar `provider`/`riverpod` como dependencia nueva). Ver `lib/services/expenses_repository.dart`.
+  - [x] `home_screen.dart` y `expense_detail_screen.dart` migrados a consumirlo (piloto antes de extender al resto). Ambos envueltos en `ListenableBuilder`; `expense_detail_screen.dart` lee la versión más actual del gasto vía `porId(...)`, con el `widget.expense` original como respaldo.
+  - [x] Guardar un gasto desde el flujo de escaneo refresca `home_screen` sin recarga manual. `expense_review_screen.dart` crea el gasto vía `ExpensesRepository.instance.crear(...)`; se quitó el `_loadExpenses()` explícito que hacía `home_screen.dart` al volver de `ScanScreen` — el refresco ahora es 100% reactivo.
+  - [x] Documentar el patrón para que el resto de las pantallas (licitaciones, cotizaciones) lo vayan adoptando de forma incremental. Ver `ARCHITECTURE.md`.
+  - **Decisión de alcance**: `expense_review_screen.dart` sigue usando `DatabaseService.instance` directo para el chequeo de duplicados (`_buscarDuplicado`, una lectura puntual sin necesidad de reactividad) y para `guardarItemsGasto` (el detalle de ítems queda fuera del alcance de D1, que es específicamente sobre "gastos"). Documentado en `ARCHITECTURE.md` para que no se lea como una omisión.
+  - **Cobertura de tests**: 9 tests nuevos en `test/expenses_repository_test.dart` (carga, notificación a listeners, inmutabilidad del getter, creación, eliminación optimista, búsqueda por id). `widget_test.dart` confirma que la app sigue arrancando con el `HomeScreen` migrado.
 
 ### D2. Telemetría de calidad del parser OCR
-- **Prioridad**: Baja · **Esfuerzo**: M · **Estado**: Backlog
+- **Prioridad**: Baja · **Esfuerzo**: M · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #4](REVISION_CODIGO.md)
 - **Descripción**: no hay visibilidad de qué tan seguido el parser falla (`descuadre = true`, monto en 0) con boletas reales.
 - **Criterios de aceptación**:
-  - [ ] Registrar localmente (con opt-in del usuario, sin subir la foto ni datos sensibles) tasa de `descuadre`/monto-cero.
-  - [ ] Pantalla o export simple para revisar esas métricas durante el período de prueba con usuarios reales.
-  - [ ] Definir con el cliente si esto se sube a un backend propio o queda solo local por ahora.
+  - [x] Registrar localmente (con opt-in del usuario, sin subir la foto ni datos sensibles) tasa de `descuadre`/monto-cero. Ver `lib/services/ocr_telemetry.dart`: solo cuenta agregados (total de escaneos, con descuadre, con monto $0) en `shared_preferences`, nunca la foto ni el texto del OCR. Desactivada por defecto.
+  - [x] Pantalla o export simple para revisar esas métricas durante el período de prueba con usuarios reales. Nueva `OcrTelemetriaScreen` (menú ⋮ de `home_screen.dart` → "Calidad del escaneo (OCR)"): switch de opt-in, métricas con sus tasas, botón "Compartir resumen" (texto plano vía `share_plus`) y "Reiniciar métricas".
+  - [x] Definir con el cliente si esto se sube a un backend propio o queda solo local por ahora. **Decisión**: solo local por ahora — el proyecto no tiene backend propio.
 
 ### D3. Actualizar y endurecer reglas de lint
-- **Prioridad**: Baja · **Esfuerzo**: S · **Estado**: Backlog
+- **Prioridad**: Baja · **Esfuerzo**: S · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md #9](REVISION_CODIGO.md)
 - **Descripción**: `flutter_lints` está en `^3.0.0` (desactualizado) y `analysis_options.yaml` no agrega reglas propias.
 - **Criterios de aceptación**:
-  - [ ] Actualizar `flutter_lints` a la última versión compatible con el SDK del proyecto.
-  - [ ] Sumar `avoid_print`, `always_declare_return_types` y otras reglas acordadas con el equipo.
-  - [ ] `flutter analyze` pasa sin warnings nuevos tras el cambio (o se resuelven los que aparezcan).
+  - [x] Actualizar `flutter_lints` a la última versión compatible con el SDK del proyecto. `^3.0.0` → `^6.0.0`.
+  - [x] Sumar `avoid_print`, `always_declare_return_types` y otras reglas acordadas con el equipo. También `prefer_single_quotes`, `unnecessary_lambdas`, `unnecessary_this`, `prefer_final_locals`.
+  - [x] `flutter analyze` pasa sin warnings nuevos tras el cambio (o se resuelven los que aparezcan). Se resolvieron los 24 issues que aparecieron: 8 de `unintended_html_in_doc_comment` (un doc comment con `<TED>...` en `ted_service.dart` que el nuevo set de reglas interpreta como HTML) y 16 entre `unnecessary_lambdas`/`prefer_final_locals`.
 
 ### D4. Limpieza del `CREATE TABLE` de `ordenes_compra`
-- **Prioridad**: Baja · **Esfuerzo**: S · **Estado**: Backlog
+- **Prioridad**: Baja · **Esfuerzo**: S · **Estado**: Hecho
 - **Origen**: [REVISION_CODIGO.md — hallazgos menores](REVISION_CODIGO.md)
 - **Descripción**: `fechaPagoEsperada` se agrega con un `ALTER TABLE` aparte inmediatamente después del `CREATE TABLE` en `_createDB`, en vez de estar declarada directamente en la tabla.
 - **Criterios de aceptación**:
-  - [ ] Columna `fechaPagoEsperada` incluida directo en `_createOrdenesCompraTable`.
-  - [ ] Se quita el `ALTER TABLE` redundante de `_createDB` (la migración `oldVersion < 9` en `_upgradeDB` se mantiene intacta, es la que corre en updates reales).
+  - [x] Columna `fechaPagoEsperada` incluida directo en `_createOrdenesCompraTable`.
+  - [x] Se quita el `ALTER TABLE` redundante de `_createDB`.
+  - **Ajuste sobre el criterio original**: seguir el criterio al pie de la letra (dejar intacto el `ALTER TABLE` de `oldVersion < 9`) habría reintroducido el mismo bug de columna duplicada corregido en A1 — cualquier usuario saltando de antes de v8 a v9+ en una pasada habría chocado con `fechaPagoEsperada` duplicada, igual que pasó con `cantidad`. Se aplicó el mismo guard (`if (oldVersion >= 8)`) antes del `ALTER TABLE`, con test de regresión dedicado (`test/database_service_test.dart`, esquema v8 reconstruido) que cubre tanto el esquema como la preservación de datos de una orden de compra cargada antes de la migración.
 
 ---
 

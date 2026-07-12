@@ -74,6 +74,83 @@ Future<void> _crearEsquemaV5(Database db, int version) async {
   ''');
 }
 
+/// Esquema de la versión 8 tal como quedaba una instalación real en ese
+/// momento: `ordenes_compra` sin la columna `fechaPagoEsperada` (se agregó
+/// recién en la migración a v9). Reproduce el mismo escenario de bug que
+/// `_crearEsquemaV5`, pero para la migración `oldVersion < 9`.
+Future<void> _crearEsquemaV8(Database db, int version) async {
+  await db.execute('''
+    CREATE TABLE expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category TEXT NOT NULL,
+      date TEXT NOT NULL,
+      imagePath TEXT,
+      folio TEXT,
+      tipoDte TEXT,
+      rutEmisor TEXT,
+      nombreEmisor TEXT,
+      montoNeto REAL,
+      montoIva REAL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE oportunidades (
+      codigo TEXT PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      organismo TEXT,
+      fechaCierre TEXT,
+      montoEstimado REAL,
+      fechaGuardado TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE oportunidades_vistas (
+      codigo TEXT PRIMARY KEY,
+      fechaVista TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE ingresos_esperados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      descripcion TEXT NOT NULL,
+      monto REAL NOT NULL,
+      diaDelMes INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE expense_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      expenseId INTEGER NOT NULL,
+      nombre TEXT NOT NULL,
+      cantidad REAL NOT NULL DEFAULT 1,
+      precio REAL NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE cotizacion_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      codigoOportunidad TEXT NOT NULL,
+      nombre TEXT NOT NULL,
+      cantidad REAL NOT NULL,
+      precioUnitario REAL NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE ordenes_compra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      codigoOportunidad TEXT NOT NULL,
+      nombreOportunidad TEXT NOT NULL,
+      proveedorNombre TEXT,
+      proveedorRut TEXT,
+      montoCompra REAL NOT NULL,
+      montoIngreso REAL NOT NULL,
+      fecha TEXT NOT NULL
+    )
+  ''');
+}
+
 const _tablasEsperadas = {
   'expenses',
   'oportunidades',
@@ -172,6 +249,18 @@ void main() {
     });
 
     test(
+        'una instalación real varada en v8 (ordenes_compra sin `fechaPagoEsperada`) migra sin '
+        'error de columna duplicada al saltar directo a la versión actual', () async {
+      final path = join(tempDir.path, 'desde_v8.db');
+      final dbV8 = await openDatabase(path, version: 8, onCreate: _crearEsquemaV8);
+      await dbV8.close();
+
+      final db = await DatabaseService.instance.openForTesting(path);
+
+      expect(await _columnasDe(db, 'ordenes_compra'), contains('fechaPagoEsperada'));
+    });
+
+    test(
         'un gasto real cargado en v1 sobrevive intacto tras migrar a la versión actual, '
         'y las columnas tributarias nuevas quedan en null (sin datos que inventar)', () async {
       final path = join(tempDir.path, 'con_datos_v1.db');
@@ -238,6 +327,31 @@ void main() {
       // ALTER TABLE ... ADD COLUMN cantidad REAL NOT NULL DEFAULT 1
       // backfillea las filas ya existentes con el DEFAULT, no con null.
       expect(item['cantidad'], 1.0);
+    });
+
+    test(
+        'una orden de compra cargada en v8 (sin `fechaPagoEsperada`) sobrevive la migración '
+        'y la columna nueva queda en null (sin fecha de pago que inventar)', () async {
+      final path = join(tempDir.path, 'con_datos_v8.db');
+      final dbV8 = await openDatabase(path, version: 8, onCreate: _crearEsquemaV8);
+      await dbV8.insert('ordenes_compra', {
+        'codigoOportunidad': 'OC-1',
+        'nombreOportunidad': 'Suministro de prueba',
+        'montoCompra': 100000.0,
+        'montoIngreso': 250000.0,
+        'fecha': '2022-08-01T00:00:00.000',
+      });
+      await dbV8.close();
+
+      final dbMigrada = await DatabaseService.instance.openForTesting(path);
+      final ordenes = await dbMigrada.query('ordenes_compra');
+
+      expect(ordenes, hasLength(1));
+      final orden = ordenes.single;
+      expect(orden['codigoOportunidad'], 'OC-1');
+      expect(orden['montoCompra'], 100000.0);
+      expect(orden['montoIngreso'], 250000.0);
+      expect(orden['fechaPagoEsperada'], isNull);
     });
   });
 

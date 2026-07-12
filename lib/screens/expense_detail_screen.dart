@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/expense.dart';
 import '../models/item_gasto.dart';
 import '../services/database_service.dart';
+import '../services/expenses_repository.dart';
 
 /// Detalle de un gasto ya guardado, en tres secciones: el monto total (el
 /// que cuenta para los cálculos) con la foto del ticket, los datos del
@@ -21,6 +22,7 @@ class ExpenseDetailScreen extends StatefulWidget {
 class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
   bool _loading = true;
   List<ItemGasto> _items = [];
+  final _repo = ExpensesRepository.instance;
 
   @override
   void initState() {
@@ -56,7 +58,19 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final expense = widget.expense;
+    return ListenableBuilder(
+      listenable: _repo,
+      builder: (context, _) {
+        // Lee la versión más actual del gasto desde el repositorio
+        // compartido cuando está disponible, en vez de confiar para
+        // siempre en el snapshot que llegó por constructor.
+        final expense = _repo.porId(widget.expense.id) ?? widget.expense;
+        return _buildScaffold(context, expense);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, Expense expense) {
     final tieneRutaImagen = expense.imagePath != null;
     final imagenExiste =
         tieneRutaImagen && File(expense.imagePath!).existsSync();

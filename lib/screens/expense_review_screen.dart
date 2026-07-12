@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/expense.dart';
 import '../models/item_gasto.dart';
 import '../services/database_service.dart';
+import '../services/expenses_repository.dart';
 import '../services/receipt_storage.dart';
 
 /// Pantalla de revisión post-OCR: muestra la foto del ticket junto a los
@@ -114,7 +115,7 @@ class _ExpenseReviewScreenState extends State<ExpenseReviewScreen> {
         TextEditingController(text: widget.initialAmount.toStringAsFixed(0));
     _categoria = widget.initialCategory;
     _fecha = widget.fechaDocumento ?? DateTime.now();
-    _items = widget.itemsDetectados.map((m) => Map<String, dynamic>.from(m)).toList();
+    _items = widget.itemsDetectados.map(Map<String, dynamic>.from).toList();
     _titleController.addListener(() {
       if (!_tituloEditado) setState(() => _tituloEditado = true);
     });
@@ -306,7 +307,7 @@ class _ExpenseReviewScreenState extends State<ExpenseReviewScreen> {
       montoNeto: widget.montoNeto,
       montoIva: widget.montoIva,
     );
-    final guardado = await DatabaseService.instance.createExpense(expense);
+    final guardado = await ExpensesRepository.instance.crear(expense);
 
     if (_items.isNotEmpty) {
       final items = _items

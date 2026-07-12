@@ -56,7 +56,7 @@ class _OportunidadDetalleScreenState extends State<OportunidadDetalleScreen> {
     final puntuados = <MapEntry<Expense, int>>[];
     for (final gasto in gastos) {
       final titulo = gasto.title.toLowerCase();
-      final score = palabrasClave.where((p) => titulo.contains(p)).length;
+      final score = palabrasClave.where(titulo.contains).length;
       if (score > 0) puntuados.add(MapEntry(gasto, score));
     }
 

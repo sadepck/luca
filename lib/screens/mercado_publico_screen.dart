@@ -132,7 +132,7 @@ class _MercadoPublicoScreenState extends State<MercadoPublicoScreen> {
       if (texto.isNotEmpty && !contenido.contains(texto)) return false;
 
       if (texto.isEmpty && _palabrasClave.isNotEmpty) {
-        return _palabrasClave.any((p) => contenido.contains(p));
+        return _palabrasClave.any(contenido.contains);
       }
       return true;
     }).toList();

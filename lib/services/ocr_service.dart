@@ -108,13 +108,13 @@ class OcrService {
       totalDesdeTexto = false;
     }
 
-    String category = _detectCategory(text);
+    final String category = _detectCategory(text);
     // Preferir el título desde los ítems ya extraídos (que respetan los
     // límites DETALLE/SUBTOTAL y los mismos filtros de ruido): evita que
     // direcciones, códigos o texto de encabezado que [_extractProducts]
     // no filtra (porque recorre todo el documento sin esos límites)
     // terminen mostrándose como si fueran el producto comprado.
-    String title = items.isNotEmpty
+    final String title = items.isNotEmpty
         ? items.take(2).map((i) => i['nombre'] as String).join(', ')
         : _extractProducts(lines);
 
@@ -731,7 +731,7 @@ class OcrService {
     final indiceVentanaAmpliada = (hasta + 40).clamp(0, lineas.length);
     final ventanaAmpliada = lineas.sublist(
         (desde + idxPrecioUnit + 1).clamp(0, lineas.length), indiceVentanaAmpliada);
-    var preciosCandidatos = <_LineaOcr>[];
+    final preciosCandidatos = <_LineaOcr>[];
     for (final l in ventanaAmpliada) {
       final texto = _normalizarSignoPeso(l.texto.trim());
       if (!_lineaConSignoPeso.hasMatch(texto)) continue;
